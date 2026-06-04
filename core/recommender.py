@@ -100,12 +100,22 @@ def _load_model():
     se llama, para que la app pueda arrancar aunque las dependencias pesadas
     aún se estén instalando."""
     import os
-    # Fuerza carga desde la caché local sin comprobar la red. Evita que la
-    # carga se cuelgue en silencio si la petición a HuggingFace se queda
-    # esperando. El modelo ya está descargado (se usó en compute_embeddings).
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+    # ¿Está el modelo ya descargado en la caché local de HuggingFace?
+    #  · En local (tu Mac) SÍ → forzamos modo offline para evitar que la carga
+    #    se cuelgue esperando una comprobación de red a HuggingFace.
+    #  · En la nube / primera vez NO → dejamos que lo descargue (online).
+    hf_home = os.environ.get("HF_HOME")
+    hf_cache = (
+        os.environ.get("HF_HUB_CACHE")
+        or (os.path.join(hf_home, "hub") if hf_home else None)
+        or os.path.expanduser("~/.cache/huggingface/hub")
+    )
+    cached = os.path.isdir(os.path.join(hf_cache, "models--allenai--specter"))
+    mode = "1" if cached else "0"
+    os.environ.setdefault("HF_HUB_OFFLINE", mode)
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", mode)
 
     try:
         from sentence_transformers import SentenceTransformer
@@ -115,7 +125,8 @@ def _load_model():
             "uv pip install sentence-transformers"
         ) from exc
 
-    log.info("Cargando modelo de embeddings %s (offline)…", EMBEDDING_MODEL_NAME)
+    log.info("Cargando modelo de embeddings %s (%s)…",
+             EMBEDDING_MODEL_NAME, "offline/caché" if cached else "descarga")
     model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     log.info("Modelo %s cargado.", EMBEDDING_MODEL_NAME)
     return model
