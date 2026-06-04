@@ -6,6 +6,8 @@ Lanzar con:
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -21,12 +23,22 @@ from core.recommender import (
     rank_journals,
 )
 
+APP_TITLE = "GINARE Journal Selector"
+LOGO_PATH = str(Path(__file__).resolve().parent / "assets" / "ginare_logo.png")
+
 logging.basicConfig(level=logging.INFO)
 st.set_page_config(
-    page_title="Recomendador de revistas",
+    page_title=APP_TITLE,
     page_icon="📚",
     layout="wide",
 )
+
+# Logo de marca (arriba a la izquierda y en la barra lateral)
+if os.path.exists(LOGO_PATH):
+    try:
+        st.logo(LOGO_PATH, size="large")
+    except Exception:  # noqa: BLE001 — versiones antiguas de Streamlit
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -62,7 +74,11 @@ def _badge(label: str, ok: bool, detail: str = "") -> str:
 def _render_header(index) -> None:
     s = index.sources
     cols = st.columns([2, 1, 1, 1, 1, 1])
-    cols[0].markdown("### 📚 Recomendador de revistas")
+    with cols[0]:
+        if os.path.exists(LOGO_PATH):
+            st.image(LOGO_PATH, width=240)
+        else:
+            st.markdown(f"### {APP_TITLE}")
     cols[1].markdown(_badge("OpenAlex", s.journals, f"{index.n_journals()}"))
     cols[2].markdown(_badge("JCR", s.jcr, "local" if s.jcr else "no"))
     cols[3].markdown(_badge("DOAJ", s.doaj))
@@ -212,6 +228,63 @@ def _format_jcr_categories(cats: list[dict]) -> str:
     return " · ".join(parts)
 
 
+def _sync_overrides_to_github() -> None:
+    """Sube data/overrides.json al repo de GitHub para que las verificaciones
+    queden guardadas de forma permanente y compartida con todos los usuarios.
+
+    Solo actúa si hay credenciales en los *secrets* de Streamlit:
+
+        [github]
+        token  = "ghp_xxx"                       # token con permiso de escritura
+        repo   = "Alfrelerin/GINARE-Journal-Selector"
+        branch = "main"
+
+    Sin esos secrets (p.ej. en local) no hace nada: el mantenedor sube
+    overrides.json a mano con un commit normal.
+    """
+    try:
+        gh = st.secrets["github"]
+        token = gh["token"]
+        repo = gh["repo"]
+        branch = gh.get("branch", "main")
+    except Exception:  # noqa: BLE001 — sin secrets configurados → modo local
+        return
+
+    import base64
+    import requests
+
+    from core.config import OVERRIDES_PATH
+
+    try:
+        content = OVERRIDES_PATH.read_bytes()
+    except OSError:
+        return
+
+    api = f"https://api.github.com/repos/{repo}/contents/data/overrides.json"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    try:
+        # SHA del fichero actual (necesario para actualizarlo)
+        sha = None
+        r = requests.get(api, headers=headers, params={"ref": branch}, timeout=20)
+        if r.status_code == 200:
+            sha = r.json().get("sha")
+        body = {
+            "message": "Actualizar verificaciones (overrides) desde la app",
+            "content": base64.b64encode(content).decode("ascii"),
+            "branch": branch,
+        }
+        if sha:
+            body["sha"] = sha
+        pr = requests.put(api, headers=headers, json=body, timeout=20)
+        if pr.status_code not in (200, 201):
+            st.warning(f"No se pudo sincronizar con GitHub (código {pr.status_code}).")
+    except requests.RequestException as exc:
+        st.warning(f"No se pudo sincronizar con GitHub: {exc}")
+
+
 def _render_verification_form(rec, journal_index) -> None:
     """Mini-formulario de verificación dentro del expander de una revista."""
     issn = rec.issn or ""
@@ -334,6 +407,9 @@ def _render_verification_form(rec, journal_index) -> None:
             verified = [k for k, v in fields.items() if v is not None] if verify_all else []
             upsert_override(issn=issn, fields=fields, verified_fields=verified)
             _invalidate_index_cache()
+            # Sincroniza con GitHub para que la verificación quede guardada
+            # para todos (si hay credenciales configuradas en los secrets).
+            _sync_overrides_to_github()
             # Pedimos recalcular el ranking con los datos nuevos, manteniendo
             # la tabla visible (no se pierde como antes).
             st.session_state["force_recompute"] = True
