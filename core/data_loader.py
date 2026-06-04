@@ -209,6 +209,75 @@ def load_index() -> JournalIndex:
     )
 
 
+def _compute_jcr_categories_list(journals: pd.DataFrame, jcr_ranks: pd.DataFrame) -> pd.DataFrame:
+    """Añade/actualiza la columna `jcr_categories_list` en journals a partir
+    de la tabla jcr_ranks (una categoría por fila)."""
+    if jcr_ranks is None or jcr_ranks.empty or journals.empty:
+        return journals
+    cat_by_issn = (
+        jcr_ranks.groupby("issn")["jcr_category"]
+        .apply(lambda s: sorted({str(x) for x in s if isinstance(x, str)}))
+        .to_dict()
+    )
+
+    def _gather_cats(row) -> list[str]:
+        issns: set[str] = set()
+        primary = row.get("issn")
+        if primary and isinstance(primary, str):
+            issns.add(primary)
+        raw = row.get("all_issns", "") or ""
+        for alt in str(raw).split(";"):
+            alt = alt.strip()
+            if alt:
+                issns.add(alt)
+        collected: set[str] = set()
+        for i in issns:
+            collected.update(cat_by_issn.get(i, []))
+        return sorted(collected)
+
+    journals = journals.copy()
+    journals["jcr_categories_list"] = journals.apply(_gather_cats, axis=1)
+    return journals
+
+
+def apply_uploaded_jcr(
+    base: "JournalIndex",
+    jcr_index_df: pd.DataFrame | None,
+    jcr_ranks_df: pd.DataFrame | None,
+) -> "JournalIndex":
+    """Devuelve una copia del índice con un JCR subido por el usuario aplicado
+    (cuartiles, IF y rankings). No toca el disco: es por sesión, así cada
+    persona usa su propio JCR sin que viaje en el repo (licencia Clarivate)."""
+    import copy as _copy
+
+    journals = base.journals.copy()
+    if jcr_index_df is not None and not jcr_index_df.empty:
+        journals = _merge_on_issn(
+            journals, jcr_index_df,
+            ["jcr_jif", "jcr_quartile", "jcr_category", "jcr_best_rank", "jcr_best_percentile"],
+        )
+
+    jcr_ranks = (
+        jcr_ranks_df if (jcr_ranks_df is not None and not jcr_ranks_df.empty)
+        else base.jcr_ranks
+    )
+    journals = _compute_jcr_categories_list(journals, jcr_ranks)
+
+    sources = _copy.copy(base.sources)
+    sources.jcr = jcr_index_df is not None and not jcr_index_df.empty
+    sources.jcr_ranks = jcr_ranks is not None and not jcr_ranks.empty
+
+    return JournalIndex(
+        journals=journals,
+        jcr_ranks=jcr_ranks if jcr_ranks is not None else base.jcr_ranks,
+        articles=base.articles,
+        embeddings=base.embeddings,
+        embeddings_meta=base.embeddings_meta,
+        favorites=base.favorites,
+        sources=sources,
+    )
+
+
 def _merge_on_issn(
     base: pd.DataFrame, extra: pd.DataFrame, columns: list[str]
 ) -> pd.DataFrame:

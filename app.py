@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from core.config import EMBEDDINGS_PATH
-from core.data_loader import load_index, save_favorites
+from core.data_loader import apply_uploaded_jcr, load_index, save_favorites
 from core.exporter import recommendations_to_dataframe, to_excel_bytes
 from core.filters import JournalFilters, OA_MODELS_ALL, apply_filters
 from core.overrides import EDITABLE_FIELDS, OA_MODELS, upsert_override
@@ -341,11 +341,63 @@ def _render_verification_form(rec, journal_index) -> None:
             st.rerun()
 
 
+def _apply_jcr_uploads(index):
+    """Cargador de JCR por sesión. Permite a cada usuario subir su propio
+    jcr_index.parquet y jcr_ranks.parquet (datos Clarivate, licencia privada)
+    sin que viajen en el repo. Se aplican solo en su sesión."""
+    import io
+
+    with st.sidebar:
+        with st.expander("📥 Cargar mi JCR (Clarivate)", expanded=not index.sources.jcr):
+            if index.sources.jcr:
+                st.caption("✅ JCR cargado en esta sesión. Cuartiles, IF y rankings oficiales en uso.")
+            else:
+                st.caption(
+                    "Sube tus ficheros JCR para usar cuartiles, IF y rankings oficiales. "
+                    "**No se guardan en el servidor**: solo se usan en tu sesión "
+                    "(la licencia de Clarivate no permite redistribuirlos)."
+                )
+            up_idx = st.file_uploader("jcr_index.parquet", type=["parquet"], key="up_jcr_index")
+            up_ranks = st.file_uploader("jcr_ranks.parquet", type=["parquet"], key="up_jcr_ranks")
+
+    def _read(uploaded, slot):
+        """Lee el parquet subido, cacheándolo por sesión (solo re-lee si cambia)."""
+        if uploaded is None:
+            st.session_state.pop(f"{slot}_df", None)
+            st.session_state.pop(f"{slot}_sig", None)
+            return None
+        sig = (uploaded.name, uploaded.size)
+        if st.session_state.get(f"{slot}_sig") != sig:
+            try:
+                st.session_state[f"{slot}_df"] = pd.read_parquet(io.BytesIO(uploaded.getvalue()))
+                st.session_state[f"{slot}_sig"] = sig
+            except Exception as exc:  # noqa: BLE001
+                st.sidebar.error(f"No pude leer {uploaded.name}: {exc}")
+                return None
+        return st.session_state.get(f"{slot}_df")
+
+    jcr_idx_df = _read(up_idx, "jcr_index")
+    jcr_ranks_df = _read(up_ranks, "jcr_ranks")
+
+    if jcr_idx_df is None and jcr_ranks_df is None:
+        return index
+
+    # Cacheamos el índice ya fusionado para no rehacer el merge en cada rerun.
+    sig = (id(index),
+           st.session_state.get("jcr_index_sig"),
+           st.session_state.get("jcr_ranks_sig"))
+    if st.session_state.get("_jcr_applied_sig") != sig:
+        st.session_state["_jcr_applied_index"] = apply_uploaded_jcr(index, jcr_idx_df, jcr_ranks_df)
+        st.session_state["_jcr_applied_sig"] = sig
+    return st.session_state["_jcr_applied_index"]
+
+
 # ─────────────────────────────────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────────────────────────────────
 def main() -> None:
     index = _load_index_cached()
+    index = _apply_jcr_uploads(index)
     _render_header(index)
     st.caption("Pega el título y abstract de tu artículo. La app puntúa por afinidad temática "
                "(SPECTER) y por los criterios que elijas.")
