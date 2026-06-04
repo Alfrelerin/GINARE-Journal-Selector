@@ -6,7 +6,10 @@ textColor = "#1f2328"
 font = "sans serif"
 
 [server]
-headless = false
+# headless=true evita que Streamlit pida el email por teclado al arrancar
+# (eso bloquea el despliegue en la nube). En local no abre el navegador solo,
+# pero basta con ir a http://localhost:8501 a mano.
+headless = true
 # "none" evita el cuelgue conocido del watcher de Streamlit al inspeccionar
 # los módulos internos de PyTorch (torch.classes) al cargar SPECTER.
 fileWatcherType = "none"
