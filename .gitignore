@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.eggs/
+*.egg-info/
+*.egg
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv
+.python-version
+uv.lock
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Datos derivados de Clarivate JCR (NO redistribuir — licencia propietaria)
+# Cada usuario descarga los suyos con su acceso institucional.
+data/jcr/*.csv
+data/jcr/*.xlsx
+data/jcr/*.xls
+data/jcr_index.parquet
+data/jcr_ranks.parquet
+!data/jcr/.gitkeep
+!data/jcr/README.md
+
+# Sherpa Romeo: caché privado, el parquet sí se sube (datos abiertos)
+data/sherpa/cache/
+
+# Cachés grandes de datos (se reconstruyen con los pipelines)
+data/openalex/cache/
+data/embeddings_cache/
+data/sjr/*.csv
+!data/sjr/.gitkeep
+
+# Modelos descargados (se bajan en el primer arranque)
+models/
+.cache/
+
+# Logs y temporales
+*.log
+*.tmp
+.env
+.env.local

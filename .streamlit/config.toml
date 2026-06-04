@@ -1,0 +1,16 @@
+[theme]
+primaryColor = "#1f6feb"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6fa"
+textColor = "#1f2328"
+font = "sans serif"
+
+[server]
+headless = false
+# "none" evita el cuelgue conocido del watcher de Streamlit al inspeccionar
+# los módulos internos de PyTorch (torch.classes) al cargar SPECTER.
+fileWatcherType = "none"
+runOnSave = false
+
+[browser]
+gatherUsageStats = false

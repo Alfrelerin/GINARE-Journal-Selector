@@ -1,0 +1,14 @@
+# Espejo de pyproject.toml para usuarios que prefieran pip clásico.
+# Recomendado: usar `uv pip install -r requirements.txt` (mucho más rápido).
+streamlit>=1.32
+pandas>=2.1
+numpy>=1.26
+pyarrow>=15
+requests>=2.31
+scikit-learn>=1.4
+sentence-transformers>=2.7
+torch>=2.2
+openpyxl>=3.1
+tqdm>=4.66
+python-dotenv>=1.0
+tenacity>=8.2
