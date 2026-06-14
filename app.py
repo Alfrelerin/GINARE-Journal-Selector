@@ -621,7 +621,7 @@ def _render_results(recs, index) -> None:
                     if r.quartile:
                         st.markdown(f"**Cuartil**: {r.quartile}")
             with top_cols[1]:
-                if r.homepage_url:
+                if isinstance(r.homepage_url, str) and r.homepage_url.strip():
                     st.link_button("🔗 Web de la revista", r.homepage_url, use_container_width=True)
                 else:
                     st.caption("Web no disponible")

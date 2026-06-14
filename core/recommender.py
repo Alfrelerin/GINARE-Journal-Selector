@@ -339,6 +339,11 @@ def rank_journals(
         # Si el usuario fijó manualmente una categoría, esa reemplaza a las
         # automáticas (override). Si no, usamos las de jcr_ranks.
         issn_val = row.get("issn")
+        issn_val = str(issn_val).strip() if issn_val is not None and not pd.isna(issn_val) else None
+        # homepage_url vacío llega como NaN (float). NaN es "truthy" en Python,
+        # así que sin normalizar reventaría st.link_button (espera str).
+        home_url = row.get("homepage_url")
+        home_url = str(home_url).strip() if home_url is not None and not pd.isna(home_url) else None
         jcr_cats: list[dict] = []
         cat_override = row.get("manual_jcr_category")
         if cat_override is not None and not pd.isna(cat_override) and str(cat_override).strip():
@@ -376,7 +381,7 @@ def rank_journals(
             name=row.get("name", ""),
             issn=issn_val,
             publisher=pub,
-            homepage_url=row.get("homepage_url"),
+            homepage_url=home_url,
             quartile=q,
             impact_factor=float(if_val) if if_val is not None and not pd.isna(if_val) else None,
             apc_eur=float(apc) if apc is not None and not pd.isna(apc) else None,
